@@ -1,0 +1,14 @@
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "delivery_service"
+    static_configs:
+      # The doc uses 172.17.0.1 -- that is the Linux docker0 bridge IP and
+      # does not exist on macOS. Docker Desktop provides the special DNS
+      # name host.docker.internal to reach the host from a container.
+      - targets: ["host.docker.internal:8000"]
+
+rule_files:
+  - /etc/prometheus/alert_rules.yml

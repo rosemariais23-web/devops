@@ -1,0 +1,7 @@
+# Screenshots kept alongside the exercise should never reach the public repo
+*.png
+.DS_Store
+
+# Pipeline artefacts produced by the Deploy / Run Application stages
+python-app-deploy/
+__pycache__/
