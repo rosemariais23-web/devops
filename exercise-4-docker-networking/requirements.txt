@@ -1,0 +1,5 @@
+Flask==2.0.1
+# Flask 2.0.1 does not cap its Werkzeug dependency. Left unpinned, pip
+# installs Werkzeug 3.x, which removed werkzeug.urls.url_quote and breaks
+# Flask 2.0.1 on import. 2.0.3 is the contemporary matching release.
+Werkzeug==2.0.3

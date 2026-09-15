@@ -1,0 +1,72 @@
+#include <tunables/global>
+
+# A profile that actually works: the Flask app runs, AND the restricted
+# actions from Task 5 are genuinely blocked.
+#
+# Why the doc's profile cannot work even after fixing its syntax:
+# AppArmor is DEFAULT-DENY. The doc allows only "/app/** rwk" and network,
+# so the dynamic loader cannot even map libc.so.6 and nothing executes at
+# all ("cannot open shared object file"). A usable profile must allow the
+# runtime it is confining, then deny the specific things you care about.
+profile my-apparmor-profile flags=(attach_disconnected) {
+    # libc, ld.so.cache, /dev/null, /dev/urandom, basic /proc
+    #include <abstractions/base>
+
+    # --- allow the Python runtime we are confining ---
+    /usr/local/bin/python* ix,
+    /usr/local/** mr,
+    /usr/lib/** mr,
+    /lib/** mr,
+
+    # --- the application itself ---
+    /app/ r,
+    /app/** rwk,
+
+    # --- let ordinary utilities run, so the container stays usable ---
+    /bin/** ix,
+    /usr/bin/** ix,
+    /dev/tty rw,
+
+    # --- general config reads are allowed... ---
+    /etc/ r,
+    /etc/** r,
+
+    # --- Flask networking (port 5000) ---
+    # The doc grants only "network inet stream" (TCP). That is not enough:
+    # werkzeug's startup banner calls get_interface_ip(), which opens a
+    # SOCK_DGRAM (UDP) socket. Without the dgram rules below the app dies
+    # with "PermissionError: [Errno 13] Permission denied" before serving.
+    network inet stream,
+    network inet6 stream,
+    network inet dgram,
+    network inet6 dgram,
+    capability net_bind_service,
+
+    # python inspects its own fds during startup
+    /proc/*/fd/ r,
+
+    # ================= THE ACTUAL RESTRICTIONS =================
+    # ...but these specific reads are denied. An explicit "deny" overrides
+    # the "/etc/** r" allow above -- that precedence is the whole point.
+    # Result: cat /etc/passwd exits 1, cat /etc/hostname exits 0.
+    deny /etc/passwd r,
+    deny /etc/shadow rwklx,
+    deny /etc/gshadow rwklx,
+
+    # Deny running a shell. Task 5 expects exit 126.
+    #
+    # 'x' alone is not enough for `docker exec /bin/bash`: that exec is the
+    # profile-ENTRY transition (runc uses aa_change_onexec), which the
+    # profile's own x rule cannot veto. Denying 'm' and 'r' as well means
+    # the kernel cannot map/read the bash binary, so the exec fails
+    # outright -> 126. This also blocks a confined process from spawning a
+    # shell, which is the realistic attack path.
+    deny /bin/bash mrx,
+    deny /usr/bin/bash mrx,
+    deny /bin/dash mrx,
+    deny /usr/bin/dash mrx,
+
+    # Doc intent: no writing to /var, no sys_admin
+    deny /var/** rw,
+    deny capability sys_admin,
+}
